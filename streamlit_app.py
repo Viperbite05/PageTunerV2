@@ -54,7 +54,6 @@ def flatten_results_for_csv(results):
     return flat_data
 
 # --- Async Runner ---
-# ▼▼▼ THIS FUNCTION IS NEW ▼▼▼
 async def run_analysis_in_sequence(urls, delay_seconds=1.0):
     """
     Runs analysis for each URL one by one, with a delay between each.
@@ -71,7 +70,6 @@ async def run_analysis_in_sequence(urls, delay_seconds=1.0):
         
         try:
             # Run the analysis for a single URL
-            # asyncio.run() creates a new event loop for this single task
             result = await analyze_url(url)
             results.append(result)
         except Exception as e:
@@ -83,14 +81,12 @@ async def run_analysis_in_sequence(urls, delay_seconds=1.0):
 
         # If it's not the last URL, add the delay
         if i < len(urls) - 1:
-            # We must use asyncio.sleep since we are in an async function
             await asyncio.sleep(delay_seconds)
     
     # Clear the status text
     status_text.empty()
     progress_bar.empty()
     return results
-# ▲▲▲ END OF NEW FUNCTION ▲▲▲
 
 # --- PageTuner AI Dashboard ---
 st.title("🤖 PageTuner AI")
@@ -108,11 +104,8 @@ if st.button("Analyze URLs", type="primary"):
     elif len(urls) > 500:
         st.error("Maximum of 500 URLs allowed.")
     else:
-        # We no longer use st.spinner, as our new function handles status
         try:
             # Set your delay (in seconds) here
-            # 1.0 = 1 second delay between each URL
-            # 2.0 = 2 second delay, etc.
             DELAY_PER_URL = 1.0 
             
             # Call the new sequential runner
@@ -125,7 +118,6 @@ if st.button("Analyze URLs", type="primary"):
             st.exception(f"An unexpected error occurred: {e}")
 
 # --- Display Results ---
-# This entire section is unchanged
 if 'results' in st.session_state:
     results = st.session_state['results']
     
@@ -135,7 +127,6 @@ if 'results' in st.session_state:
     try:
         flat_data = flatten_results_for_csv(results)
         df = pd.DataFrame(flat_data)
-        # Create an in-memory CSV
         csv_output = df.to_csv(index=False).encode('utf-8')
         
         st.download_button(
@@ -154,11 +145,9 @@ if 'results' in st.session_state:
                 st.error(result.get('error'))
             continue
 
-        # Use an expander for each URL
         with st.expander(f"✅ {result.get('title')}"):
             st.link_button("Open URL in New Tab", result.get('url'))
             
-            # Create two columns for a cleaner layout
             col1, col2 = st.columns(2)
 
             with col1:
@@ -180,18 +169,24 @@ if 'results' in st.session_state:
                 st.markdown("**Current Meta Desc**")
                 st.code(meta_info.get('text'), language=None)
                 
-                # LLM Suggestions
+                # ▼▼▼ THIS SECTION IS UPDATED ▼▼▼
                 st.markdown("**LLM Title Recommendations:**")
-                if llm_data and not llm_data.get('error'):
-                    st.code(llm_data.get('suggestions'), language=None)
+                suggestions = llm_data.get('suggestions')
+                error_message = llm_data.get('error')
+
+                if suggestions:
+                    st.code(suggestions, language=None)
+                elif error_message:
+                    st.error(f"Could not generate suggestions: {error_message}")
                 else:
                     st.info("No title suggestions were generated.")
-                # --- END OF Title & Meta Analysis ---
+                # ▲▲▲ END OF UPDATE ▲▲▲
 
 
                 # --- Recommendations & Generated Assets ---
                 st.subheader("Recommendations & Generated Assets")
                 st.markdown("**Article Schema:**")
+                # ... (this part is unchanged) ...
                 if result.get('existing_schema', {}).get('Article'):
                     st.success("Article Schema already detected on page.")
                 elif result.get('recommendations', {}).get('article_schema'):
@@ -205,16 +200,24 @@ if 'results' in st.session_state:
                     st.warning("FAQ Schema missing. Generated schema below:")
                     st.code(result.get('recommendations').get('faq_schema'), language="json")
                 
-                # --- Content Structure ---
+                # ▼▼▼ THIS SECTION IS UPDATED ▼▼▼
                 st.subheader("Content Structure Recommendations")
-                if result.get('content_structure') and not result.get('content_structure').get('error'):
-                    st.markdown(result.get('content_structure').get('heading_suggestions'))
+                content_data = result.get('content_structure', {})
+                suggestions = content_data.get('heading_suggestions')
+                error_message = content_data.get('error')
+
+                if suggestions:
+                    st.markdown(suggestions)
+                elif error_message:
+                    st.error(f"Could not generate structure recommendations: {error_message}")
                 else:
                     st.info("Could not generate heading suggestions.")
+                # ▲▲▲ END OF UPDATE ▲▲▲
 
             with col2:
                 # --- Structural Integrity ---
                 st.subheader("Structural Integrity")
+                # ... (this part is unchanged) ...
                 for finding in result.get('structural_integrity', {}).get('headings', []):
                     st.markdown(finding) # Use markdown to render emoji/bold
                 for finding in result.get('structural_integrity', {}).get('semantics', []):
@@ -224,6 +227,16 @@ if 'results' in st.session_state:
                 st.subheader("Readability")
                 st.metric("Flesch Reading Ease", result.get('readability', {}).get('flesch_reading_ease'))
                 
-                # --- Topical Gaps ---
+                # ▼▼▼ THIS SECTION IS UPDATED ▼▼▼
                 st.subheader("Identified Content Gaps (LLM Output)")
-                st.text(result.get('topical_gaps', {}).get('raw_text'))
+                gaps_data = result.get('topical_gaps', {})
+                raw_text = gaps_data.get('raw_text')
+                error_message = gaps_data.get('error')
+
+                if raw_text:
+                    st.text(raw_text)
+                elif error_message:
+                    st.error(f"Could not generate content gaps: {error_message}")
+                else:
+                    st.info("No content gaps were generated.")
+                # ▲▲▲ END OF UPDATE ▲▲▲
